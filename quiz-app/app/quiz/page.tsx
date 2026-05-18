@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { supabase, Question } from '@/lib/supabase'
+import { getClient, Question } from '@/lib/supabase'
 
 type ShuffledQuestion = {
   id: number
@@ -55,7 +55,7 @@ function QuizContent() {
 
   useEffect(() => {
     if (!sessionId) { router.replace('/'); return }
-    supabase
+    getClient()
       .from('session_1_finance_questions')
       .select('*')
       .then(({ data }) => {
@@ -74,7 +74,7 @@ function QuizContent() {
 
     const isCorrect = selectedOption !== null ? selectedOption === q.correctShuffledLetter : null
 
-    await supabase.from('session_1_finance_answers').insert({
+    await getClient().from('session_1_finance_answers').insert({
       session_id: sessionId,
       question_id: q.id,
       selected_option: selectedOption,
@@ -82,7 +82,7 @@ function QuizContent() {
     })
 
     if (current + 1 >= questions.length) {
-      const score = await supabase
+      const score = await getClient()
         .from('session_1_finance_answers')
         .select('is_correct')
         .eq('session_id', sessionId)
@@ -90,7 +90,7 @@ function QuizContent() {
 
       const count = score.data?.length ?? 0
 
-      await supabase
+      await getClient()
         .from('session_1_finance_sessions')
         .update({ completed_at: new Date().toISOString(), score: count })
         .eq('id', sessionId)

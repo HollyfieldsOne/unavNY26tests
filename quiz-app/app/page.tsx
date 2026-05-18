@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { supabase } from '@/lib/supabase'
+import { getClient } from '@/lib/supabase'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -20,7 +20,7 @@ export default function LoginPage() {
     setLoading(true)
     setError('')
 
-    const { data, error: dbError } = await supabase
+    const { data, error: dbError } = await getClient()
       .from('session_1_finance_sessions')
       .insert({ first_name: firstName.trim(), last_name: lastName.trim() })
       .select('id')
