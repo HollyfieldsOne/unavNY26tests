@@ -52,6 +52,7 @@ function QuizContent() {
   const [hoveredOption, setHoveredOption] = useState<string | null>(null)
   const advancingRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const questionStartRef = useRef<number>(0)
 
   useEffect(() => {
     if (!sessionId) { router.replace('/'); return }
@@ -86,6 +87,16 @@ function QuizContent() {
 
       const answered = answers?.length ?? 0
       if (answered >= qs.length) { router.replace('/thank-you'); return }
+
+      const startKey = `quiz_qstart_${sessionId}`
+      const stored = sessionStorage.getItem(startKey)
+      if (stored) {
+        questionStartRef.current = parseInt(stored)
+      } else {
+        const now = Date.now()
+        questionStartRef.current = now
+        sessionStorage.setItem(startKey, now.toString())
+      }
 
       setQuestions(qs)
       setCurrent(answered)
@@ -129,9 +140,11 @@ function QuizContent() {
     }
 
     setTimeout(() => {
+      const now = Date.now()
+      questionStartRef.current = now
+      sessionStorage.setItem(`quiz_qstart_${sessionId}`, now.toString())
       setCurrent(c => c + 1)
       setSelected(null)
-      setTimeLeft(QUESTION_TIME)
       advancingRef.current = false
     }, isTimeout ? 0 : 300)
   }, [current, questions.length, sessionId, router])
@@ -139,7 +152,14 @@ function QuizContent() {
   useEffect(() => {
     if (loading || questions.length === 0) return
     advancingRef.current = false
-    setTimeLeft(QUESTION_TIME)
+    const elapsed = Math.floor((Date.now() - questionStartRef.current) / 1000)
+    const initial = Math.max(0, QUESTION_TIME - elapsed)
+    setTimeLeft(initial)
+
+    if (initial === 0) {
+      advance(null, questions[current], true)
+      return
+    }
 
     timerRef.current = setInterval(() => {
       setTimeLeft(t => {
