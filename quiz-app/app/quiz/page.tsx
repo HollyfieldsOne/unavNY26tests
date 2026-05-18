@@ -55,15 +55,44 @@ function QuizContent() {
 
   useEffect(() => {
     if (!sessionId) { router.replace('/'); return }
-    getClient()
-      .from('session_1_finance_questions')
-      .select('*')
-      .then(({ data }) => {
+
+    async function init() {
+      const { data: sess } = await getClient()
+        .from('session_1_finance_sessions')
+        .select('completed_at')
+        .eq('id', sessionId)
+        .single()
+
+      if (!sess) { router.replace('/'); return }
+      if (sess.completed_at) { router.replace('/thank-you'); return }
+
+      const cacheKey = `quiz_${sessionId}`
+      const cached = sessionStorage.getItem(cacheKey)
+      let qs: ShuffledQuestion[]
+
+      if (cached) {
+        qs = JSON.parse(cached)
+      } else {
+        const { data } = await getClient().from('session_1_finance_questions').select('*')
         if (!data) { router.replace('/'); return }
-        const picked = pickRandom(data as Question[], 10)
-        setQuestions(picked.map(buildShuffledQuestion))
-        setLoading(false)
-      })
+        qs = pickRandom(data as Question[], 10).map(buildShuffledQuestion)
+        sessionStorage.setItem(cacheKey, JSON.stringify(qs))
+      }
+
+      const { data: answers } = await getClient()
+        .from('session_1_finance_answers')
+        .select('id')
+        .eq('session_id', sessionId)
+
+      const answered = answers?.length ?? 0
+      if (answered >= qs.length) { router.replace('/thank-you'); return }
+
+      setQuestions(qs)
+      setCurrent(answered)
+      setLoading(false)
+    }
+
+    init()
   }, [sessionId, router])
 
   const advance = useCallback(async (selectedOption: string | null, q: ShuffledQuestion, isTimeout: boolean) => {
