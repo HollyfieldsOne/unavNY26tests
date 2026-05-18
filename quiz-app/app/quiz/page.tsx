@@ -91,7 +91,10 @@ function QuizContent() {
       const startKey = `quiz_qstart_${sessionId}`
       const stored = sessionStorage.getItem(startKey)
       if (stored) {
-        questionStartRef.current = parseInt(stored)
+        // penalise the refresh by backdating the start by 1 extra second
+        const penalised = parseInt(stored) - 1000
+        questionStartRef.current = penalised
+        sessionStorage.setItem(startKey, penalised.toString())
       } else {
         const now = Date.now()
         questionStartRef.current = now
