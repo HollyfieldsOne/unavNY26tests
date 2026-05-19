@@ -56,6 +56,12 @@ function QuizContent() {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const questionStartRef = useRef<number>(0)
   const quizRef = useRef(getQuiz(quizId))
+  // Refs that stay current inside interval callbacks without stale closure issues
+  const questionsRef = useRef<ShuffledQuestion[]>([])
+  const currentRef = useRef(0)
+  const countdownRef = useRef(QUESTION_TIME)
+  // Accumulated correct-answer count, restored from DB on refresh
+  const correctCountRef = useRef(0)
 
   useEffect(() => {
     if (!sessionId) { router.replace('/'); return }
@@ -87,13 +93,24 @@ function QuizContent() {
         sessionStorage.setItem(cacheKey, JSON.stringify(qs))
       }
 
-      const { data: answers } = await getClient()
+      const { data: existingAnswers } = await getClient()
         .from(answersTable)
-        .select('id')
+        .select('question_id, is_correct')
         .eq('session_id', sessionId)
 
-      const answered = answers?.length ?? 0
+      // Count distinct question IDs so duplicate rows don't corrupt the resume position
+      const answeredIds = new Set((existingAnswers ?? []).map((r: { question_id: number }) => r.question_id))
+      const answered = answeredIds.size
       if (answered >= qs.length) { router.replace('/thank-you'); return }
+
+      // Restore correct-answer count: a question counts as correct if ANY answer for it was correct
+      const correctByQuestion = new Map<number, boolean>()
+      for (const row of existingAnswers ?? []) {
+        const r = row as { question_id: number; is_correct: boolean | null }
+        if (r.is_correct === true) correctByQuestion.set(r.question_id, true)
+        else if (!correctByQuestion.has(r.question_id)) correctByQuestion.set(r.question_id, false)
+      }
+      correctCountRef.current = [...correctByQuestion.values()].filter(Boolean).length
 
       const startKey = `quiz_qstart_${sessionId}`
       const stored = sessionStorage.getItem(startKey)
@@ -107,6 +124,8 @@ function QuizContent() {
         sessionStorage.setItem(startKey, now.toString())
       }
 
+      questionsRef.current = qs
+      currentRef.current = answered
       setQuestions(qs)
       setCurrent(answered)
       setLoading(false)
@@ -115,6 +134,10 @@ function QuizContent() {
     init()
   }, [sessionId, quizId, router])
 
+  // Keep refs in sync so interval callbacks always have current values
+  useEffect(() => { questionsRef.current = questions }, [questions])
+  useEffect(() => { currentRef.current = current }, [current])
+
   const advance = useCallback(async (selectedOption: string | null, q: ShuffledQuestion, isTimeout: boolean) => {
     if (advancingRef.current) return
     advancingRef.current = true
@@ -122,7 +145,9 @@ function QuizContent() {
     if (timerRef.current) clearInterval(timerRef.current)
 
     const quiz = quizRef.current!
+    // Compute correctness solely from the shuffled letter tracked client-side
     const isCorrect = selectedOption !== null ? selectedOption === q.correctShuffledLetter : null
+    if (isCorrect === true) correctCountRef.current++
 
     await getClient().from(quiz.answersTable).insert({
       session_id: sessionId,
@@ -131,18 +156,11 @@ function QuizContent() {
       is_correct: isCorrect,
     })
 
-    if (current + 1 >= questions.length) {
-      const score = await getClient()
-        .from(quiz.answersTable)
-        .select('is_correct')
-        .eq('session_id', sessionId)
-        .eq('is_correct', true)
-
-      const count = score.data?.length ?? 0
-
+    if (currentRef.current + 1 >= questionsRef.current.length) {
+      // Use the client-side counter — never re-count DB rows, which can have duplicates
       await getClient()
         .from(quiz.sessionsTable)
-        .update({ completed_at: new Date().toISOString(), score: count })
+        .update({ completed_at: new Date().toISOString(), score: correctCountRef.current })
         .eq('id', sessionId)
 
       router.push('/thank-you')
@@ -157,33 +175,36 @@ function QuizContent() {
       setSelected(null)
       advancingRef.current = false
     }, isTimeout ? 0 : 300)
-  }, [current, questions.length, sessionId, router])
+  }, [sessionId, router])
 
   useEffect(() => {
     if (loading || questions.length === 0) return
     advancingRef.current = false
     const elapsed = Math.floor((Date.now() - questionStartRef.current) / 1000)
     const initial = Math.max(0, QUESTION_TIME - elapsed)
+    countdownRef.current = initial
     setTimeLeft(initial)
 
     if (initial === 0) {
-      advance(null, questions[current], true)
+      advance(null, questionsRef.current[currentRef.current], true)
       return
     }
 
     timerRef.current = setInterval(() => {
-      setTimeLeft(t => {
-        if (t <= 1) {
-          clearInterval(timerRef.current!)
-          advance(null, questions[current], true)
-          return 0
-        }
-        return t - 1
-      })
+      countdownRef.current -= 1
+      if (countdownRef.current <= 0) {
+        clearInterval(timerRef.current!)
+        setTimeLeft(0)
+        // Called directly from the interval — NOT inside a state updater,
+        // so React cannot call it multiple times as a side-effect check
+        advance(null, questionsRef.current[currentRef.current], true)
+      } else {
+        setTimeLeft(countdownRef.current)
+      }
     }, 1000)
 
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [current, loading, questions.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current, loading, questions.length, advance])
 
   function handleSelect(letter: string) {
     if (selected || advancingRef.current) return
