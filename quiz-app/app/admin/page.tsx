@@ -249,7 +249,7 @@ export default function AdminPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h1 style={{ fontFamily: "'Sora', sans-serif", fontWeight: 600, fontSize: '1.5rem', color: '#f0f0ff', marginBottom: '0.2rem' }}>
-              {activeQuiz.label} — Results
+              Results
             </h1>
             <p style={{ color: '#8888aa', fontSize: '0.9rem' }}>
               {completed.length} completed · {incomplete.length} incomplete
@@ -276,31 +276,44 @@ export default function AdminPage() {
           </button>
         </div>
 
-        {/* Quiz tabs */}
-        <div style={{ display: 'flex', gap: '0.5rem' }}>
-          {QUIZZES.map(q => {
-            const isActive = q.id === activeQuiz.id
-            return (
-              <button
-                key={q.id}
-                onClick={() => handleTabSwitch(q)}
-                disabled={tabLoading}
-                style={{
-                  background: isActive ? '#6c63ff' : '#12121a',
-                  color: isActive ? '#fff' : '#8888aa',
-                  border: `1px solid ${isActive ? '#6c63ff' : '#2a2a3e'}`,
-                  borderRadius: '8px',
-                  padding: '0.5rem 1rem',
-                  fontSize: '0.9rem',
-                  fontFamily: "'DM Sans', sans-serif",
-                  fontWeight: isActive ? 600 : 400,
-                  cursor: tabLoading ? 'not-allowed' : 'pointer',
-                }}
-              >
+        {/* Quiz selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <label style={{ color: '#8888aa', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap' }}>
+            Viewing results for:
+          </label>
+          <select
+            value={activeQuiz.id}
+            onChange={e => {
+              const quiz = QUIZZES.find(q => q.id === e.target.value)
+              if (quiz) handleTabSwitch(quiz)
+            }}
+            disabled={tabLoading}
+            style={{
+              background: '#0a0a0f',
+              border: '1px solid #2a2a3e',
+              borderRadius: '8px',
+              padding: '0.6rem 2.5rem 0.6rem 1rem',
+              color: '#f0f0ff',
+              fontSize: '0.95rem',
+              fontFamily: "'DM Sans', sans-serif",
+              outline: 'none',
+              cursor: tabLoading ? 'not-allowed' : 'pointer',
+              appearance: 'none',
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888aa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 0.9rem center',
+              minWidth: '220px',
+            }}
+          >
+            {QUIZZES.map(q => (
+              <option key={q.id} value={q.id} style={{ background: '#12121a' }}>
                 {q.label}
-              </button>
-            )
-          })}
+              </option>
+            ))}
+          </select>
+          {tabLoading && (
+            <span style={{ color: '#8888aa', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif" }}>Loading…</span>
+          )}
         </div>
         {fetchError && (
           <p style={{ color: '#f87171', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif" }}>{fetchError}</p>
