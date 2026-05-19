@@ -96,7 +96,7 @@ export default function AdminPage() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    if (password !== '331011') {
+    if (password !== 'ny26unav') {
       setPwError('Incorrect password.')
       return
     }
