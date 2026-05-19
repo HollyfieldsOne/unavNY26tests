@@ -3,11 +3,26 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getClient } from '@/lib/supabase'
+import { QUIZZES, getQuiz } from '@/lib/quiz-config'
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  background: '#0a0a0f',
+  border: '1px solid #2a2a3e',
+  borderRadius: '8px',
+  padding: '0.75rem 1rem',
+  color: '#f0f0ff',
+  fontSize: '1rem',
+  fontFamily: "'DM Sans', sans-serif",
+  outline: 'none',
+  boxSizing: 'border-box',
+}
 
 export default function LoginPage() {
   const router = useRouter()
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
+  const [quizId, setQuizId] = useState(QUIZZES[0].id)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -17,11 +32,14 @@ export default function LoginPage() {
       setError('Please enter both your first and last name.')
       return
     }
+    const quiz = getQuiz(quizId)
+    if (!quiz) { setError('Please select a valid quiz.'); return }
+
     setLoading(true)
     setError('')
 
     const { data, error: dbError } = await getClient()
-      .from('session_1_finance_sessions')
+      .from(quiz.sessionsTable)
       .insert({ first_name: firstName.trim(), last_name: lastName.trim() })
       .select('id')
       .single()
@@ -32,7 +50,7 @@ export default function LoginPage() {
       return
     }
 
-    router.push(`/quiz?session=${data.id}`)
+    router.push(`/quiz?session=${data.id}&quiz=${quiz.id}`)
   }
 
   return (
@@ -64,14 +82,14 @@ export default function LoginPage() {
             marginBottom: '0.4rem',
             lineHeight: 1.2,
           }}>
-            Finance — Session 1
+            Attention Check
           </h1>
           <p style={{
             fontFamily: "'DM Sans', sans-serif",
             color: '#8888aa',
             fontSize: '1rem',
           }}>
-            Attention Check
+            Enter your details to begin
           </p>
         </div>
 
@@ -92,17 +110,7 @@ export default function LoginPage() {
               onChange={e => setFirstName(e.target.value)}
               placeholder="Enter your first name"
               autoComplete="given-name"
-              style={{
-                width: '100%',
-                background: '#0a0a0f',
-                border: '1px solid #2a2a3e',
-                borderRadius: '8px',
-                padding: '0.75rem 1rem',
-                color: '#f0f0ff',
-                fontSize: '1rem',
-                fontFamily: "'DM Sans', sans-serif",
-                outline: 'none',
-              }}
+              style={inputStyle}
               onFocus={e => (e.target.style.borderColor = '#6c63ff')}
               onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
             />
@@ -124,20 +132,41 @@ export default function LoginPage() {
               onChange={e => setLastName(e.target.value)}
               placeholder="Enter your last name"
               autoComplete="family-name"
-              style={{
-                width: '100%',
-                background: '#0a0a0f',
-                border: '1px solid #2a2a3e',
-                borderRadius: '8px',
-                padding: '0.75rem 1rem',
-                color: '#f0f0ff',
-                fontSize: '1rem',
-                fontFamily: "'DM Sans', sans-serif",
-                outline: 'none',
-              }}
+              style={inputStyle}
               onFocus={e => (e.target.style.borderColor = '#6c63ff')}
               onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
             />
+          </div>
+
+          <div>
+            <label style={{
+              display: 'block',
+              color: '#8888aa',
+              fontSize: '0.85rem',
+              marginBottom: '0.4rem',
+              fontFamily: "'DM Sans', sans-serif",
+            }}>
+              Quiz
+            </label>
+            <select
+              value={quizId}
+              onChange={e => setQuizId(e.target.value)}
+              style={{
+                ...inputStyle,
+                appearance: 'none',
+                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888aa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                backgroundRepeat: 'no-repeat',
+                backgroundPosition: 'right 1rem center',
+                paddingRight: '2.5rem',
+                cursor: 'pointer',
+              }}
+            >
+              {QUIZZES.map(q => (
+                <option key={q.id} value={q.id} style={{ background: '#12121a' }}>
+                  {q.label}
+                </option>
+              ))}
+            </select>
           </div>
 
           {error && (

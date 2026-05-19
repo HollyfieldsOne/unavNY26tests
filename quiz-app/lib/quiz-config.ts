@@ -1,0 +1,28 @@
+export type QuizConfig = {
+  id: string
+  label: string
+  questionsTable: string
+  sessionsTable: string
+  answersTable: string
+}
+
+export const QUIZZES: QuizConfig[] = [
+  {
+    id: 'finance',
+    label: 'Session 1 Finance',
+    questionsTable: 'session_1_finance_questions',
+    sessionsTable: 'session_1_finance_sessions',
+    answersTable: 'session_1_finance_answers',
+  },
+  {
+    id: 'double-degree',
+    label: 'Session 1 – Double Degree',
+    questionsTable: 'session_1_doble_grado',
+    sessionsTable: 'session_1_doble_grado_sessions',
+    answersTable: 'session_1_doble_grado_answers',
+  },
+]
+
+export function getQuiz(id: string | null): QuizConfig | undefined {
+  return QUIZZES.find(q => q.id === id)
+}

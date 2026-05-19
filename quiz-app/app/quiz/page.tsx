@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef, useCallback, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { getClient, Question } from '@/lib/supabase'
+import { getQuiz } from '@/lib/quiz-config'
 
 type ShuffledQuestion = {
   id: number
@@ -43,6 +44,7 @@ function QuizContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams.get('session')
+  const quizId = searchParams.get('quiz')
 
   const [questions, setQuestions] = useState<ShuffledQuestion[]>([])
   const [current, setCurrent] = useState(0)
@@ -53,13 +55,17 @@ function QuizContent() {
   const advancingRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const questionStartRef = useRef<number>(0)
+  const quizRef = useRef(getQuiz(quizId))
 
   useEffect(() => {
     if (!sessionId) { router.replace('/'); return }
+    const quiz = getQuiz(quizId)
+    if (!quiz) { router.replace('/'); return }
+    quizRef.current = quiz
 
     async function init() {
       const { data: sess } = await getClient()
-        .from('session_1_finance_sessions')
+        .from(quiz.sessionsTable)
         .select('completed_at')
         .eq('id', sessionId)
         .single()
@@ -74,14 +80,14 @@ function QuizContent() {
       if (cached) {
         qs = JSON.parse(cached)
       } else {
-        const { data } = await getClient().from('session_1_finance_questions').select('*')
+        const { data } = await getClient().from(quiz.questionsTable).select('*')
         if (!data) { router.replace('/'); return }
         qs = pickRandom(data as Question[], 10).map(buildShuffledQuestion)
         sessionStorage.setItem(cacheKey, JSON.stringify(qs))
       }
 
       const { data: answers } = await getClient()
-        .from('session_1_finance_answers')
+        .from(quiz.answersTable)
         .select('id')
         .eq('session_id', sessionId)
 
@@ -91,7 +97,6 @@ function QuizContent() {
       const startKey = `quiz_qstart_${sessionId}`
       const stored = sessionStorage.getItem(startKey)
       if (stored) {
-        // penalise the refresh by backdating the start by 1 extra second
         const penalised = parseInt(stored) - 1000
         questionStartRef.current = penalised
         sessionStorage.setItem(startKey, penalised.toString())
@@ -107,7 +112,7 @@ function QuizContent() {
     }
 
     init()
-  }, [sessionId, router])
+  }, [sessionId, quizId, router])
 
   const advance = useCallback(async (selectedOption: string | null, q: ShuffledQuestion, isTimeout: boolean) => {
     if (advancingRef.current) return
@@ -115,9 +120,10 @@ function QuizContent() {
 
     if (timerRef.current) clearInterval(timerRef.current)
 
+    const quiz = quizRef.current!
     const isCorrect = selectedOption !== null ? selectedOption === q.correctShuffledLetter : null
 
-    await getClient().from('session_1_finance_answers').insert({
+    await getClient().from(quiz.answersTable).insert({
       session_id: sessionId,
       question_id: q.id,
       selected_option: selectedOption,
@@ -126,7 +132,7 @@ function QuizContent() {
 
     if (current + 1 >= questions.length) {
       const score = await getClient()
-        .from('session_1_finance_answers')
+        .from(quiz.answersTable)
         .select('is_correct')
         .eq('session_id', sessionId)
         .eq('is_correct', true)
@@ -134,7 +140,7 @@ function QuizContent() {
       const count = score.data?.length ?? 0
 
       await getClient()
-        .from('session_1_finance_sessions')
+        .from(quiz.sessionsTable)
         .update({ completed_at: new Date().toISOString(), score: count })
         .eq('id', sessionId)
 

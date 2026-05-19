@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { getClient } from '@/lib/supabase'
+import { QUIZZES, QuizConfig } from '@/lib/quiz-config'
 
 type Session = {
   id: string
@@ -37,19 +38,19 @@ function gradeColor(g: string): string {
   return '#8888aa'
 }
 
-function downloadTxt(sessions: Session[]) {
+function downloadTxt(sessions: Session[], quizLabel: string) {
   const lines = sessions.map(s => {
     const g = grade(s.score)
     const scoreStr = s.score !== null ? `${s.score}/10` : 'N/A'
     return `${s.first_name} ${s.last_name} | Score: ${scoreStr} | Grade: ${g} (${gradeLabel(g)})`
   })
-  const header = 'Finance Session 1 — Results\n' + '='.repeat(40) + '\n\n'
+  const header = `${quizLabel} — Results\n` + '='.repeat(40) + '\n\n'
   const content = header + lines.join('\n') + '\n'
   const blob = new Blob([content], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'finance-session-1-results.txt'
+  a.download = `${quizLabel.toLowerCase().replace(/\s+/g, '-')}-results.txt`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -67,12 +68,23 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
+async function fetchSessions(quiz: QuizConfig): Promise<Session[] | null> {
+  const { data, error } = await getClient()
+    .from(quiz.sessionsTable)
+    .select('id, first_name, last_name, score, completed_at, started_at')
+    .order('started_at', { ascending: false })
+  if (error) return null
+  return (data as Session[]) ?? []
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState('')
   const [authed, setAuthed] = useState(false)
   const [pwError, setPwError] = useState('')
+  const [activeQuiz, setActiveQuiz] = useState<QuizConfig>(QUIZZES[0])
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(false)
+  const [tabLoading, setTabLoading] = useState(false)
   const [fetchError, setFetchError] = useState('')
 
   async function handleLogin(e: React.FormEvent) {
@@ -83,19 +95,30 @@ export default function AdminPage() {
     }
     setLoading(true)
     setPwError('')
-    const { data, error } = await getClient()
-      .from('session_1_finance_sessions')
-      .select('id, first_name, last_name, score, completed_at, started_at')
-      .order('started_at', { ascending: false })
-
-    if (error) {
+    const data = await fetchSessions(QUIZZES[0])
+    if (!data) {
       setFetchError('Failed to load results. Please try again.')
       setLoading(false)
       return
     }
-    setSessions((data as Session[]) ?? [])
+    setSessions(data)
     setAuthed(true)
     setLoading(false)
+  }
+
+  async function handleTabSwitch(quiz: QuizConfig) {
+    if (quiz.id === activeQuiz.id) return
+    setTabLoading(true)
+    setFetchError('')
+    const data = await fetchSessions(quiz)
+    if (!data) {
+      setFetchError('Failed to load results.')
+      setTabLoading(false)
+      return
+    }
+    setActiveQuiz(quiz)
+    setSessions(data)
+    setTabLoading(false)
   }
 
   if (!authed) {
@@ -192,14 +215,14 @@ export default function AdminPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h1 style={{ fontFamily: "'Sora', sans-serif", fontWeight: 600, fontSize: '1.5rem', color: '#f0f0ff', marginBottom: '0.2rem' }}>
-              Finance Session 1 — Results
+              {activeQuiz.label} — Results
             </h1>
             <p style={{ color: '#8888aa', fontSize: '0.9rem' }}>
               {completed.length} completed · {incomplete.length} incomplete
             </p>
           </div>
           <button
-            onClick={() => downloadTxt(sessions)}
+            onClick={() => downloadTxt(sessions, activeQuiz.label)}
             style={{
               background: '#6c63ff',
               color: '#fff',
@@ -218,6 +241,36 @@ export default function AdminPage() {
             ↓ Download .txt
           </button>
         </div>
+
+        {/* Quiz tabs */}
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          {QUIZZES.map(q => {
+            const isActive = q.id === activeQuiz.id
+            return (
+              <button
+                key={q.id}
+                onClick={() => handleTabSwitch(q)}
+                disabled={tabLoading}
+                style={{
+                  background: isActive ? '#6c63ff' : '#12121a',
+                  color: isActive ? '#fff' : '#8888aa',
+                  border: `1px solid ${isActive ? '#6c63ff' : '#2a2a3e'}`,
+                  borderRadius: '8px',
+                  padding: '0.5rem 1rem',
+                  fontSize: '0.9rem',
+                  fontFamily: "'DM Sans', sans-serif",
+                  fontWeight: isActive ? 600 : 400,
+                  cursor: tabLoading ? 'not-allowed' : 'pointer',
+                }}
+              >
+                {q.label}
+              </button>
+            )
+          })}
+        </div>
+        {fetchError && (
+          <p style={{ color: '#f87171', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif" }}>{fetchError}</p>
+        )}
 
         {/* Grade legend */}
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
