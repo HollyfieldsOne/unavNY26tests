@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { getClient } from '@/lib/supabase'
+import { QUIZZES, QuizConfig } from '@/lib/quiz-config'
 
 type Session = {
   id: string
@@ -37,19 +38,19 @@ function gradeColor(g: string): string {
   return '#8888aa'
 }
 
-function downloadTxt(sessions: Session[]) {
+function downloadTxt(sessions: Session[], quizLabel: string) {
   const lines = sessions.map(s => {
     const g = grade(s.score)
     const scoreStr = s.score !== null ? `${s.score}/10` : 'N/A'
     return `${s.first_name} ${s.last_name} | Score: ${scoreStr} | Grade: ${g} (${gradeLabel(g)})`
   })
-  const header = 'Finance Session 1 — Results\n' + '='.repeat(40) + '\n\n'
+  const header = `${quizLabel} — Results\n` + '='.repeat(40) + '\n\n'
   const content = header + lines.join('\n') + '\n'
   const blob = new Blob([content], { type: 'text/plain' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'finance-session-1-results.txt'
+  a.download = `${quizLabel.toLowerCase().replace(/\s+/g, '-')}-results.txt`
   a.click()
   URL.revokeObjectURL(url)
 }
@@ -67,35 +68,91 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 }
 
+async function fetchSessions(quiz: QuizConfig): Promise<Session[] | null> {
+  const { data, error } = await getClient()
+    .from(quiz.sessionsTable)
+    .select('id, first_name, last_name, score, completed_at, started_at')
+    .order('started_at', { ascending: false })
+  if (error) return null
+  return (data as Session[]) ?? []
+}
+
 export default function AdminPage() {
   const [password, setPassword] = useState('')
   const [authed, setAuthed] = useState(false)
   const [pwError, setPwError] = useState('')
+  const [activeQuiz, setActiveQuiz] = useState<QuizConfig>(QUIZZES[0])
   const [sessions, setSessions] = useState<Session[]>([])
   const [loading, setLoading] = useState(false)
+  const [tabLoading, setTabLoading] = useState(false)
   const [fetchError, setFetchError] = useState('')
+
+  // passcode management
+  const [currentPasscode, setCurrentPasscode] = useState('')
+  const [newPasscode, setNewPasscode] = useState('')
+  const [passcodeMsg, setPasscodeMsg] = useState('')
+  const [passcodeLoading, setPasscodeLoading] = useState(false)
+  const [showPasscode, setShowPasscode] = useState(false)
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    if (password !== '331011') {
+    if (password !== 'ny26unav') {
       setPwError('Incorrect password.')
       return
     }
     setLoading(true)
     setPwError('')
-    const { data, error } = await getClient()
-      .from('session_1_finance_sessions')
-      .select('id, first_name, last_name, score, completed_at, started_at')
-      .order('started_at', { ascending: false })
-
-    if (error) {
+    const [sessData, pcData] = await Promise.all([
+      fetchSessions(QUIZZES[0]),
+      getClient().from('app_settings').select('value').eq('key', 'passcode').single(),
+    ])
+    if (!sessData) {
       setFetchError('Failed to load results. Please try again.')
       setLoading(false)
       return
     }
-    setSessions((data as Session[]) ?? [])
+    setSessions(sessData)
+    setCurrentPasscode(pcData.data?.value ?? '')
     setAuthed(true)
     setLoading(false)
+  }
+
+  async function handleUpdatePasscode(e: React.FormEvent) {
+    e.preventDefault()
+    if (!/^\d{6}$/.test(newPasscode)) {
+      setPasscodeMsg('Passcode must be exactly 6 digits.')
+      return
+    }
+    setPasscodeLoading(true)
+    setPasscodeMsg('')
+    const { error } = await getClient()
+      .from('app_settings')
+      .update({ value: newPasscode })
+      .eq('key', 'passcode')
+    if (error) {
+      setPasscodeMsg('Failed to update passcode.')
+    } else {
+      setCurrentPasscode(newPasscode)
+      setNewPasscode('')
+      setPasscodeMsg('Passcode updated.')
+      setTimeout(() => setPasscodeMsg(''), 3000)
+    }
+    setPasscodeLoading(false)
+  }
+
+  async function handleTabSwitch(quiz: QuizConfig) {
+    if (quiz.id === activeQuiz.id) return
+    setTabLoading(true)
+    setFetchError('')
+    const data = await fetchSessions(quiz)
+    if (!data) {
+      setFetchError('Failed to load results.')
+      setTabLoading(false)
+      return
+    }
+    setActiveQuiz(quiz)
+    setSessions(data)
+    setTabLoading(false)
   }
 
   if (!authed) {
@@ -192,14 +249,14 @@ export default function AdminPage() {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <div>
             <h1 style={{ fontFamily: "'Sora', sans-serif", fontWeight: 600, fontSize: '1.5rem', color: '#f0f0ff', marginBottom: '0.2rem' }}>
-              Finance Session 1 — Results
+              Results
             </h1>
             <p style={{ color: '#8888aa', fontSize: '0.9rem' }}>
               {completed.length} completed · {incomplete.length} incomplete
             </p>
           </div>
           <button
-            onClick={() => downloadTxt(sessions)}
+            onClick={() => downloadTxt(sessions, activeQuiz.label)}
             style={{
               background: '#6c63ff',
               color: '#fff',
@@ -217,6 +274,147 @@ export default function AdminPage() {
           >
             ↓ Download .txt
           </button>
+        </div>
+
+        {/* Quiz selector */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <label style={{ color: '#8888aa', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif", whiteSpace: 'nowrap' }}>
+            Viewing results for:
+          </label>
+          <select
+            value={activeQuiz.id}
+            onChange={e => {
+              const quiz = QUIZZES.find(q => q.id === e.target.value)
+              if (quiz) handleTabSwitch(quiz)
+            }}
+            disabled={tabLoading}
+            style={{
+              background: '#0a0a0f',
+              border: '1px solid #2a2a3e',
+              borderRadius: '8px',
+              padding: '0.6rem 2.5rem 0.6rem 1rem',
+              color: '#f0f0ff',
+              fontSize: '0.95rem',
+              fontFamily: "'DM Sans', sans-serif",
+              outline: 'none',
+              cursor: tabLoading ? 'not-allowed' : 'pointer',
+              appearance: 'none',
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888aa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+              backgroundRepeat: 'no-repeat',
+              backgroundPosition: 'right 0.9rem center',
+              minWidth: '220px',
+            }}
+          >
+            {QUIZZES.map(q => (
+              <option key={q.id} value={q.id} style={{ background: '#12121a' }}>
+                {q.label}
+              </option>
+            ))}
+          </select>
+          {tabLoading && (
+            <span style={{ color: '#8888aa', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif" }}>Loading…</span>
+          )}
+        </div>
+        {fetchError && (
+          <p style={{ color: '#f87171', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif" }}>{fetchError}</p>
+        )}
+
+        {/* Passcode management */}
+        <div style={{
+          background: '#12121a',
+          border: '1px solid #1e1e2e',
+          borderRadius: '12px',
+          padding: '1.25rem 1.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <span style={{ fontFamily: "'Sora', sans-serif", fontWeight: 600, color: '#f0f0ff', fontSize: '0.95rem' }}>
+              Session Passcode
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                fontFamily: 'monospace',
+                fontSize: '1.1rem',
+                color: '#6c63ff',
+                letterSpacing: '0.2em',
+                background: '#0a0a0f',
+                border: '1px solid #2a2a3e',
+                borderRadius: '6px',
+                padding: '0.2rem 0.7rem',
+              }}>
+                {showPasscode ? currentPasscode : '••••••'}
+              </span>
+              <button
+                onClick={() => setShowPasscode(v => !v)}
+                style={{
+                  background: 'none',
+                  border: '1px solid #2a2a3e',
+                  borderRadius: '6px',
+                  color: '#8888aa',
+                  cursor: 'pointer',
+                  padding: '0.2rem 0.5rem',
+                  fontSize: '0.8rem',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                {showPasscode ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </div>
+          <form onSubmit={handleUpdatePasscode} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={newPasscode}
+              onChange={e => { setNewPasscode(e.target.value.replace(/\D/g, '')); setPasscodeMsg('') }}
+              placeholder="New 6-digit code"
+              style={{
+                flex: 1,
+                minWidth: '140px',
+                background: '#0a0a0f',
+                border: '1px solid #2a2a3e',
+                borderRadius: '8px',
+                padding: '0.6rem 0.9rem',
+                color: '#f0f0ff',
+                fontSize: '1rem',
+                fontFamily: 'monospace',
+                letterSpacing: '0.2em',
+                outline: 'none',
+              }}
+              onFocus={e => (e.target.style.borderColor = '#6c63ff')}
+              onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
+            />
+            <button
+              type="submit"
+              disabled={passcodeLoading}
+              style={{
+                background: passcodeLoading ? '#4a4580' : '#6c63ff',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.6rem 1.2rem',
+                fontSize: '0.9rem',
+                fontFamily: "'Sora', sans-serif",
+                fontWeight: 600,
+                cursor: passcodeLoading ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {passcodeLoading ? 'Saving…' : 'Update'}
+            </button>
+          </form>
+          {passcodeMsg && (
+            <p style={{
+              fontSize: '0.85rem',
+              fontFamily: "'DM Sans', sans-serif",
+              color: passcodeMsg === 'Passcode updated.' ? '#4ade80' : '#f87171',
+            }}>
+              {passcodeMsg}
+            </p>
+          )}
         </div>
 
         {/* Grade legend */}
