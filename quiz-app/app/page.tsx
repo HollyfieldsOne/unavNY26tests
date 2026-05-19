@@ -25,6 +25,7 @@ export default function LoginPage() {
   const [step, setStep] = useState<'passcode' | 'register'>('passcode')
   const [passcodeInput, setPasscodeInput] = useState('')
   const [passcodeError, setPasscodeError] = useState('')
+  const [passcodeReady, setPasscodeReady] = useState(false)
   const correctPasscode = useRef<string | null>(null)
 
   // register step
@@ -40,17 +41,22 @@ export default function LoginPage() {
       .select('value')
       .eq('key', 'passcode')
       .single()
-      .then(({ data }) => {
-        if (data) correctPasscode.current = data.value
+      .then(({ data, error }) => {
+        if (data?.value) {
+          correctPasscode.current = data.value
+          setPasscodeReady(true)
+        } else {
+          setPasscodeError(
+            error?.code === 'PGRST116' || error?.code === '42P01'
+              ? 'Setup incomplete — ask your instructor.'
+              : 'Could not load passcode. Please refresh.'
+          )
+        }
       })
   }, [])
 
   function handlePasscode(e: React.FormEvent) {
     e.preventDefault()
-    if (correctPasscode.current === null) {
-      setPasscodeError('Could not verify passcode. Please refresh.')
-      return
-    }
     if (passcodeInput.trim() === correctPasscode.current) {
       setStep('register')
     } else {
@@ -154,8 +160,9 @@ export default function LoginPage() {
             )}
             <button
               type="submit"
+              disabled={!passcodeReady}
               style={{
-                background: '#6c63ff',
+                background: passcodeReady ? '#6c63ff' : '#4a4580',
                 color: '#fff',
                 border: 'none',
                 borderRadius: '10px',
@@ -163,11 +170,11 @@ export default function LoginPage() {
                 fontSize: '1rem',
                 fontFamily: "'Sora', sans-serif",
                 fontWeight: 600,
-                cursor: 'pointer',
+                cursor: passcodeReady ? 'pointer' : 'not-allowed',
                 marginTop: '0.25rem',
               }}
             >
-              Continue
+              {passcodeReady ? 'Continue' : 'Loading…'}
             </button>
           </form>
         ) : (
