@@ -87,6 +87,13 @@ export default function AdminPage() {
   const [tabLoading, setTabLoading] = useState(false)
   const [fetchError, setFetchError] = useState('')
 
+  // passcode management
+  const [currentPasscode, setCurrentPasscode] = useState('')
+  const [newPasscode, setNewPasscode] = useState('')
+  const [passcodeMsg, setPasscodeMsg] = useState('')
+  const [passcodeLoading, setPasscodeLoading] = useState(false)
+  const [showPasscode, setShowPasscode] = useState(false)
+
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     if (password !== '331011') {
@@ -95,15 +102,42 @@ export default function AdminPage() {
     }
     setLoading(true)
     setPwError('')
-    const data = await fetchSessions(QUIZZES[0])
-    if (!data) {
+    const [sessData, pcData] = await Promise.all([
+      fetchSessions(QUIZZES[0]),
+      getClient().from('app_settings').select('value').eq('key', 'passcode').single(),
+    ])
+    if (!sessData) {
       setFetchError('Failed to load results. Please try again.')
       setLoading(false)
       return
     }
-    setSessions(data)
+    setSessions(sessData)
+    setCurrentPasscode(pcData.data?.value ?? '')
     setAuthed(true)
     setLoading(false)
+  }
+
+  async function handleUpdatePasscode(e: React.FormEvent) {
+    e.preventDefault()
+    if (!/^\d{6}$/.test(newPasscode)) {
+      setPasscodeMsg('Passcode must be exactly 6 digits.')
+      return
+    }
+    setPasscodeLoading(true)
+    setPasscodeMsg('')
+    const { error } = await getClient()
+      .from('app_settings')
+      .update({ value: newPasscode })
+      .eq('key', 'passcode')
+    if (error) {
+      setPasscodeMsg('Failed to update passcode.')
+    } else {
+      setCurrentPasscode(newPasscode)
+      setNewPasscode('')
+      setPasscodeMsg('Passcode updated.')
+      setTimeout(() => setPasscodeMsg(''), 3000)
+    }
+    setPasscodeLoading(false)
   }
 
   async function handleTabSwitch(quiz: QuizConfig) {
@@ -271,6 +305,104 @@ export default function AdminPage() {
         {fetchError && (
           <p style={{ color: '#f87171', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif" }}>{fetchError}</p>
         )}
+
+        {/* Passcode management */}
+        <div style={{
+          background: '#12121a',
+          border: '1px solid #1e1e2e',
+          borderRadius: '12px',
+          padding: '1.25rem 1.5rem',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '0.75rem',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <span style={{ fontFamily: "'Sora', sans-serif", fontWeight: 600, color: '#f0f0ff', fontSize: '0.95rem' }}>
+              Session Passcode
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span style={{
+                fontFamily: 'monospace',
+                fontSize: '1.1rem',
+                color: '#6c63ff',
+                letterSpacing: '0.2em',
+                background: '#0a0a0f',
+                border: '1px solid #2a2a3e',
+                borderRadius: '6px',
+                padding: '0.2rem 0.7rem',
+              }}>
+                {showPasscode ? currentPasscode : '••••••'}
+              </span>
+              <button
+                onClick={() => setShowPasscode(v => !v)}
+                style={{
+                  background: 'none',
+                  border: '1px solid #2a2a3e',
+                  borderRadius: '6px',
+                  color: '#8888aa',
+                  cursor: 'pointer',
+                  padding: '0.2rem 0.5rem',
+                  fontSize: '0.8rem',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}
+              >
+                {showPasscode ? 'Hide' : 'Show'}
+              </button>
+            </div>
+          </div>
+          <form onSubmit={handleUpdatePasscode} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              value={newPasscode}
+              onChange={e => { setNewPasscode(e.target.value.replace(/\D/g, '')); setPasscodeMsg('') }}
+              placeholder="New 6-digit code"
+              style={{
+                flex: 1,
+                minWidth: '140px',
+                background: '#0a0a0f',
+                border: '1px solid #2a2a3e',
+                borderRadius: '8px',
+                padding: '0.6rem 0.9rem',
+                color: '#f0f0ff',
+                fontSize: '1rem',
+                fontFamily: 'monospace',
+                letterSpacing: '0.2em',
+                outline: 'none',
+              }}
+              onFocus={e => (e.target.style.borderColor = '#6c63ff')}
+              onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
+            />
+            <button
+              type="submit"
+              disabled={passcodeLoading}
+              style={{
+                background: passcodeLoading ? '#4a4580' : '#6c63ff',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                padding: '0.6rem 1.2rem',
+                fontSize: '0.9rem',
+                fontFamily: "'Sora', sans-serif",
+                fontWeight: 600,
+                cursor: passcodeLoading ? 'not-allowed' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {passcodeLoading ? 'Saving…' : 'Update'}
+            </button>
+          </form>
+          {passcodeMsg && (
+            <p style={{
+              fontSize: '0.85rem',
+              fontFamily: "'DM Sans', sans-serif",
+              color: passcodeMsg === 'Passcode updated.' ? '#4ade80' : '#f87171',
+            }}>
+              {passcodeMsg}
+            </p>
+          )}
+        </div>
 
         {/* Grade legend */}
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>

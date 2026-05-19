@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { getClient } from '@/lib/supabase'
 import { QUIZZES, getQuiz } from '@/lib/quiz-config'
@@ -20,11 +20,44 @@ const inputStyle: React.CSSProperties = {
 
 export default function LoginPage() {
   const router = useRouter()
+
+  // passcode step
+  const [step, setStep] = useState<'passcode' | 'register'>('passcode')
+  const [passcodeInput, setPasscodeInput] = useState('')
+  const [passcodeError, setPasscodeError] = useState('')
+  const correctPasscode = useRef<string | null>(null)
+
+  // register step
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [quizId, setQuizId] = useState(QUIZZES[0].id)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+
+  useEffect(() => {
+    getClient()
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'passcode')
+      .single()
+      .then(({ data }) => {
+        if (data) correctPasscode.current = data.value
+      })
+  }, [])
+
+  function handlePasscode(e: React.FormEvent) {
+    e.preventDefault()
+    if (correctPasscode.current === null) {
+      setPasscodeError('Could not verify passcode. Please refresh.')
+      return
+    }
+    if (passcodeInput.trim() === correctPasscode.current) {
+      setStep('register')
+    } else {
+      setPasscodeError('Incorrect passcode. Please try again.')
+      setPasscodeInput('')
+    }
+  }
 
   async function handleBegin(e: React.FormEvent) {
     e.preventDefault()
@@ -84,116 +117,162 @@ export default function LoginPage() {
           }}>
             Attention Check
           </h1>
-          <p style={{
-            fontFamily: "'DM Sans', sans-serif",
-            color: '#8888aa',
-            fontSize: '1rem',
-          }}>
-            Enter your details to begin
+          <p style={{ fontFamily: "'DM Sans', sans-serif", color: '#8888aa', fontSize: '1rem' }}>
+            {step === 'passcode' ? 'Enter the session passcode' : 'Enter your details to begin'}
           </p>
         </div>
 
-        <form onSubmit={handleBegin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          <div>
-            <label style={{
-              display: 'block',
-              color: '#8888aa',
-              fontSize: '0.85rem',
-              marginBottom: '0.4rem',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              First Name
-            </label>
-            <input
-              type="text"
-              value={firstName}
-              onChange={e => setFirstName(e.target.value)}
-              placeholder="Enter your first name"
-              autoComplete="given-name"
-              style={inputStyle}
-              onFocus={e => (e.target.style.borderColor = '#6c63ff')}
-              onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
-            />
-          </div>
-
-          <div>
-            <label style={{
-              display: 'block',
-              color: '#8888aa',
-              fontSize: '0.85rem',
-              marginBottom: '0.4rem',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              Last Name
-            </label>
-            <input
-              type="text"
-              value={lastName}
-              onChange={e => setLastName(e.target.value)}
-              placeholder="Enter your last name"
-              autoComplete="family-name"
-              style={inputStyle}
-              onFocus={e => (e.target.style.borderColor = '#6c63ff')}
-              onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
-            />
-          </div>
-
-          <div>
-            <label style={{
-              display: 'block',
-              color: '#8888aa',
-              fontSize: '0.85rem',
-              marginBottom: '0.4rem',
-              fontFamily: "'DM Sans', sans-serif",
-            }}>
-              Quiz
-            </label>
-            <select
-              value={quizId}
-              onChange={e => setQuizId(e.target.value)}
+        {step === 'passcode' ? (
+          <form onSubmit={handlePasscode} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div>
+              <label style={{
+                display: 'block',
+                color: '#8888aa',
+                fontSize: '0.85rem',
+                marginBottom: '0.4rem',
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                Passcode
+              </label>
+              <input
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                value={passcodeInput}
+                onChange={e => { setPasscodeInput(e.target.value.replace(/\D/g, '')); setPasscodeError('') }}
+                placeholder="6-digit code"
+                autoComplete="off"
+                style={{ ...inputStyle, letterSpacing: '0.3em', fontSize: '1.25rem', textAlign: 'center' }}
+                onFocus={e => (e.target.style.borderColor = '#6c63ff')}
+                onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
+              />
+            </div>
+            {passcodeError && (
+              <p style={{ color: '#ff4f4f', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif" }}>
+                {passcodeError}
+              </p>
+            )}
+            <button
+              type="submit"
               style={{
-                ...inputStyle,
-                appearance: 'none',
-                backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888aa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
-                backgroundRepeat: 'no-repeat',
-                backgroundPosition: 'right 1rem center',
-                paddingRight: '2.5rem',
+                background: '#6c63ff',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '0.85rem',
+                fontSize: '1rem',
+                fontFamily: "'Sora', sans-serif",
+                fontWeight: 600,
                 cursor: 'pointer',
+                marginTop: '0.25rem',
               }}
             >
-              {QUIZZES.map(q => (
-                <option key={q.id} value={q.id} style={{ background: '#12121a' }}>
-                  {q.label}
-                </option>
-              ))}
-            </select>
-          </div>
+              Continue
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleBegin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div>
+              <label style={{
+                display: 'block',
+                color: '#8888aa',
+                fontSize: '0.85rem',
+                marginBottom: '0.4rem',
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                First Name
+              </label>
+              <input
+                type="text"
+                value={firstName}
+                onChange={e => setFirstName(e.target.value)}
+                placeholder="Enter your first name"
+                autoComplete="given-name"
+                style={inputStyle}
+                onFocus={e => (e.target.style.borderColor = '#6c63ff')}
+                onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
+              />
+            </div>
 
-          {error && (
-            <p style={{ color: '#ff4f4f', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif" }}>
-              {error}
-            </p>
-          )}
+            <div>
+              <label style={{
+                display: 'block',
+                color: '#8888aa',
+                fontSize: '0.85rem',
+                marginBottom: '0.4rem',
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                Last Name
+              </label>
+              <input
+                type="text"
+                value={lastName}
+                onChange={e => setLastName(e.target.value)}
+                placeholder="Enter your last name"
+                autoComplete="family-name"
+                style={inputStyle}
+                onFocus={e => (e.target.style.borderColor = '#6c63ff')}
+                onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
+              />
+            </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            style={{
-              background: loading ? '#4a4580' : '#6c63ff',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '10px',
-              padding: '0.85rem',
-              fontSize: '1rem',
-              fontFamily: "'Sora', sans-serif",
-              fontWeight: 600,
-              cursor: loading ? 'not-allowed' : 'pointer',
-              marginTop: '0.25rem',
-            }}
-          >
-            {loading ? 'Starting…' : 'Begin'}
-          </button>
-        </form>
+            <div>
+              <label style={{
+                display: 'block',
+                color: '#8888aa',
+                fontSize: '0.85rem',
+                marginBottom: '0.4rem',
+                fontFamily: "'DM Sans', sans-serif",
+              }}>
+                Quiz
+              </label>
+              <select
+                value={quizId}
+                onChange={e => setQuizId(e.target.value)}
+                style={{
+                  ...inputStyle,
+                  appearance: 'none',
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888aa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                  backgroundRepeat: 'no-repeat',
+                  backgroundPosition: 'right 1rem center',
+                  paddingRight: '2.5rem',
+                  cursor: 'pointer',
+                }}
+              >
+                {QUIZZES.map(q => (
+                  <option key={q.id} value={q.id} style={{ background: '#12121a' }}>
+                    {q.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {error && (
+              <p style={{ color: '#ff4f4f', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif" }}>
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                background: loading ? '#4a4580' : '#6c63ff',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '10px',
+                padding: '0.85rem',
+                fontSize: '1rem',
+                fontFamily: "'Sora', sans-serif",
+                fontWeight: 600,
+                cursor: loading ? 'not-allowed' : 'pointer',
+                marginTop: '0.25rem',
+              }}
+            >
+              {loading ? 'Starting…' : 'Begin'}
+            </button>
+          </form>
+        )}
       </div>
     </main>
   )
