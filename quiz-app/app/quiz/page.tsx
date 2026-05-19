@@ -62,10 +62,11 @@ function QuizContent() {
     const quiz = getQuiz(quizId)
     if (!quiz) { router.replace('/'); return }
     quizRef.current = quiz
+    const { sessionsTable, questionsTable, answersTable } = quiz
 
     async function init() {
       const { data: sess } = await getClient()
-        .from(quiz.sessionsTable)
+        .from(sessionsTable)
         .select('completed_at')
         .eq('id', sessionId)
         .single()
@@ -80,14 +81,14 @@ function QuizContent() {
       if (cached) {
         qs = JSON.parse(cached)
       } else {
-        const { data } = await getClient().from(quiz.questionsTable).select('*')
+        const { data } = await getClient().from(questionsTable).select('*')
         if (!data) { router.replace('/'); return }
         qs = pickRandom(data as Question[], 10).map(buildShuffledQuestion)
         sessionStorage.setItem(cacheKey, JSON.stringify(qs))
       }
 
       const { data: answers } = await getClient()
-        .from(quiz.answersTable)
+        .from(answersTable)
         .select('id')
         .eq('session_id', sessionId)
 
