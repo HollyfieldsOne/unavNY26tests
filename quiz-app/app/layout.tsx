@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Finance — Session 1 | Attention Check",
-  description: "Finance Session 1 Attention Check Quiz",
+  title: "Finance Sessions | Attention Check",
+  description: "Finance Sessions Attention Check Quiz",
 };
 
 export default function RootLayout({
