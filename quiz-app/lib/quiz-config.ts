@@ -38,6 +38,7 @@ export const QUIZZES: QuizConfig[] = [
     questionsTable: 'session_2_doble_grado',
     sessionsTable: 'session_2_doble_grado_sessions',
     answersTable: 'session_2_doble_grado_answers',
+    group: 'double-degree',
   },
 ]
 
