@@ -28,6 +28,13 @@ export const QUIZZES: QuizConfig[] = [
     sessionsTable: 'session_2_finance_sessions',
     answersTable: 'session_2_finance_answers',
   },
+  {
+    id: 'double-degree-2',
+    label: 'Session 2 – Double Degree',
+    questionsTable: 'session_2_doble_grado',
+    sessionsTable: 'session_2_doble_grado_sessions',
+    answersTable: 'session_2_doble_grado_answers',
+  },
 ]
 
 export function getQuiz(id: string | null): QuizConfig | undefined {
