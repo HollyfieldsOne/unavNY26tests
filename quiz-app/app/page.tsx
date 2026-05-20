@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { getClient } from '@/lib/supabase'
 import { QUIZZES, getQuiz } from '@/lib/quiz-config'
@@ -25,10 +25,11 @@ export default function LoginPage() {
   const [step, setStep] = useState<'passcode' | 'register'>('passcode')
   const [passcodeInput, setPasscodeInput] = useState('')
   const [passcodeError, setPasscodeError] = useState('')
-  const [passcodeReady, setPasscodeReady] = useState(false)
-  const correctPasscode = useRef<string | null>(null)
+  // map of group → passcode fetched from DB
+  const [groupPasscodes, setGroupPasscodes] = useState<Record<string, string> | null>(null)
 
-  // register step
+  // register step — quizzes available depend on which group passcode was entered
+  const [availableQuizzes, setAvailableQuizzes] = useState(QUIZZES)
   const [firstName, setFirstName] = useState('')
   const [lastName, setLastName] = useState('')
   const [quizId, setQuizId] = useState(QUIZZES[0].id)
@@ -38,31 +39,40 @@ export default function LoginPage() {
   useEffect(() => {
     getClient()
       .from('app_settings')
-      .select('value')
-      .eq('key', 'passcode')
-      .single()
-      .then(({ data, error }) => {
-        if (data?.value) {
-          correctPasscode.current = data.value
-          setPasscodeReady(true)
-        } else {
+      .select('key, value')
+      .like('key', 'passcode_%')
+      .then(({ data, error: err }) => {
+        if (err || !data?.length) {
           setPasscodeError(
-            error?.code === 'PGRST116' || error?.code === '42P01'
+            err?.code === '42P01'
               ? 'Setup incomplete — ask your instructor.'
               : 'Could not load passcode. Please refresh.'
           )
+          return
         }
+        const map: Record<string, string> = {}
+        for (const row of data) {
+          const group = row.key.replace('passcode_', '')
+          map[group] = row.value
+        }
+        setGroupPasscodes(map)
       })
   }, [])
 
   function handlePasscode(e: React.FormEvent) {
     e.preventDefault()
-    if (passcodeInput.trim() === correctPasscode.current) {
-      setStep('register')
-    } else {
+    if (!groupPasscodes) return
+    const match = Object.entries(groupPasscodes).find(([, v]) => v === passcodeInput.trim())
+    if (!match) {
       setPasscodeError('Incorrect passcode. Please try again.')
       setPasscodeInput('')
+      return
     }
+    const [matchedGroup] = match
+    const quizzesForGroup = QUIZZES.filter(q => q.group === matchedGroup)
+    setAvailableQuizzes(quizzesForGroup)
+    setQuizId(quizzesForGroup[0]?.id ?? '')
+    setStep('register')
   }
 
   async function handleBegin(e: React.FormEvent) {
@@ -91,6 +101,8 @@ export default function LoginPage() {
 
     router.push(`/quiz?session=${data.id}&quiz=${quiz.id}`)
   }
+
+  const passcodeReady = groupPasscodes !== null
 
   return (
     <main style={{
@@ -223,36 +235,39 @@ export default function LoginPage() {
               />
             </div>
 
-            <div>
-              <label style={{
-                display: 'block',
-                color: '#8888aa',
-                fontSize: '0.85rem',
-                marginBottom: '0.4rem',
-                fontFamily: "'DM Sans', sans-serif",
-              }}>
-                Quiz
-              </label>
-              <select
-                value={quizId}
-                onChange={e => setQuizId(e.target.value)}
-                style={{
-                  ...inputStyle,
-                  appearance: 'none',
-                  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888aa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
-                  backgroundRepeat: 'no-repeat',
-                  backgroundPosition: 'right 1rem center',
-                  paddingRight: '2.5rem',
-                  cursor: 'pointer',
-                }}
-              >
-                {QUIZZES.map(q => (
-                  <option key={q.id} value={q.id} style={{ background: '#12121a' }}>
-                    {q.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+            {/* Only show quiz selector if the group has more than one quiz */}
+            {availableQuizzes.length > 1 && (
+              <div>
+                <label style={{
+                  display: 'block',
+                  color: '#8888aa',
+                  fontSize: '0.85rem',
+                  marginBottom: '0.4rem',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}>
+                  Quiz
+                </label>
+                <select
+                  value={quizId}
+                  onChange={e => setQuizId(e.target.value)}
+                  style={{
+                    ...inputStyle,
+                    appearance: 'none',
+                    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238888aa' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E")`,
+                    backgroundRepeat: 'no-repeat',
+                    backgroundPosition: 'right 1rem center',
+                    paddingRight: '2.5rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {availableQuizzes.map(q => (
+                    <option key={q.id} value={q.id} style={{ background: '#12121a' }}>
+                      {q.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {error && (
               <p style={{ color: '#ff4f4f', fontSize: '0.85rem', fontFamily: "'DM Sans', sans-serif" }}>

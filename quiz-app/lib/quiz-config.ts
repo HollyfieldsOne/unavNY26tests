@@ -4,6 +4,7 @@ export type QuizConfig = {
   questionsTable: string
   sessionsTable: string
   answersTable: string
+  group: string
 }
 
 export const QUIZZES: QuizConfig[] = [
@@ -13,6 +14,7 @@ export const QUIZZES: QuizConfig[] = [
     questionsTable: 'session_1_finance_questions',
     sessionsTable: 'session_1_finance_sessions',
     answersTable: 'session_1_finance_answers',
+    group: 'finance',
   },
   {
     id: 'double-degree',
@@ -20,6 +22,7 @@ export const QUIZZES: QuizConfig[] = [
     questionsTable: 'session_1_doble_grado',
     sessionsTable: 'session_1_doble_grado_sessions',
     answersTable: 'session_1_doble_grado_answers',
+    group: 'double-degree',
   },
   {
     id: 'finance-2',
@@ -27,6 +30,7 @@ export const QUIZZES: QuizConfig[] = [
     questionsTable: 'session_2_finance_questions',
     sessionsTable: 'session_2_finance_sessions',
     answersTable: 'session_2_finance_answers',
+    group: 'finance',
   },
   {
     id: 'double-degree-2',

@@ -4,6 +4,12 @@ import { useState } from 'react'
 import { getClient } from '@/lib/supabase'
 import { QUIZZES, QuizConfig } from '@/lib/quiz-config'
 
+// Groups that have independently managed passcodes
+const PASSCODE_GROUPS = [
+  { id: 'finance', label: 'Finance' },
+  { id: 'double-degree', label: 'Double Degree' },
+]
+
 type Session = {
   id: string
   first_name: string
@@ -87,12 +93,12 @@ export default function AdminPage() {
   const [tabLoading, setTabLoading] = useState(false)
   const [fetchError, setFetchError] = useState('')
 
-  // passcode management
-  const [currentPasscode, setCurrentPasscode] = useState('')
-  const [newPasscode, setNewPasscode] = useState('')
-  const [passcodeMsg, setPasscodeMsg] = useState('')
-  const [passcodeLoading, setPasscodeLoading] = useState(false)
-  const [showPasscode, setShowPasscode] = useState(false)
+  // passcode management — one entry per group
+  const [passcodes, setPasscodes] = useState<Record<string, string>>({})
+  const [newPasscodes, setNewPasscodes] = useState<Record<string, string>>({})
+  const [passcodeMsgs, setPasscodeMsgs] = useState<Record<string, string>>({})
+  const [passcodeLoadings, setPasscodeLoadings] = useState<Record<string, boolean>>({})
+  const [showPasscodes, setShowPasscodes] = useState<Record<string, boolean>>({})
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
@@ -104,7 +110,7 @@ export default function AdminPage() {
     setPwError('')
     const [sessData, pcData] = await Promise.all([
       fetchSessions(QUIZZES[0]),
-      getClient().from('app_settings').select('value').eq('key', 'passcode').single(),
+      getClient().from('app_settings').select('key, value').like('key', 'passcode_%'),
     ])
     if (!sessData) {
       setFetchError('Failed to load results. Please try again.')
@@ -112,32 +118,37 @@ export default function AdminPage() {
       return
     }
     setSessions(sessData)
-    setCurrentPasscode(pcData.data?.value ?? '')
+    const map: Record<string, string> = {}
+    for (const row of pcData.data ?? []) {
+      map[row.key.replace('passcode_', '')] = row.value
+    }
+    setPasscodes(map)
     setAuthed(true)
     setLoading(false)
   }
 
-  async function handleUpdatePasscode(e: React.FormEvent) {
+  async function handleUpdatePasscode(groupId: string, e: React.FormEvent) {
     e.preventDefault()
-    if (!/^\d{6}$/.test(newPasscode)) {
-      setPasscodeMsg('Passcode must be exactly 6 digits.')
+    const val = newPasscodes[groupId] ?? ''
+    if (!/^\d{6}$/.test(val)) {
+      setPasscodeMsgs(m => ({ ...m, [groupId]: 'Must be exactly 6 digits.' }))
       return
     }
-    setPasscodeLoading(true)
-    setPasscodeMsg('')
+    setPasscodeLoadings(l => ({ ...l, [groupId]: true }))
+    setPasscodeMsgs(m => ({ ...m, [groupId]: '' }))
     const { error } = await getClient()
       .from('app_settings')
-      .update({ value: newPasscode })
-      .eq('key', 'passcode')
+      .update({ value: val })
+      .eq('key', `passcode_${groupId}`)
     if (error) {
-      setPasscodeMsg('Failed to update passcode.')
+      setPasscodeMsgs(m => ({ ...m, [groupId]: 'Failed to update.' }))
     } else {
-      setCurrentPasscode(newPasscode)
-      setNewPasscode('')
-      setPasscodeMsg('Passcode updated.')
-      setTimeout(() => setPasscodeMsg(''), 3000)
+      setPasscodes(p => ({ ...p, [groupId]: val }))
+      setNewPasscodes(n => ({ ...n, [groupId]: '' }))
+      setPasscodeMsgs(m => ({ ...m, [groupId]: 'Updated.' }))
+      setTimeout(() => setPasscodeMsgs(m => ({ ...m, [groupId]: '' })), 3000)
     }
-    setPasscodeLoading(false)
+    setPasscodeLoadings(l => ({ ...l, [groupId]: false }))
   }
 
   async function handleTabSwitch(quiz: QuizConfig) {
@@ -320,101 +331,120 @@ export default function AdminPage() {
         )}
 
         {/* Passcode management */}
-        <div style={{
-          background: '#12121a',
-          border: '1px solid #1e1e2e',
-          borderRadius: '12px',
-          padding: '1.25rem 1.5rem',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '0.75rem',
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <span style={{ fontFamily: "'Sora', sans-serif", fontWeight: 600, color: '#f0f0ff', fontSize: '0.95rem' }}>
-              Session Passcode
-            </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span style={{
-                fontFamily: 'monospace',
-                fontSize: '1.1rem',
-                color: '#6c63ff',
-                letterSpacing: '0.2em',
-                background: '#0a0a0f',
-                border: '1px solid #2a2a3e',
-                borderRadius: '6px',
-                padding: '0.2rem 0.7rem',
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+          <span style={{ fontFamily: "'Sora', sans-serif", fontWeight: 600, color: '#f0f0ff', fontSize: '0.95rem' }}>
+            Session Passcodes
+          </span>
+          {PASSCODE_GROUPS.map(group => {
+            const current = passcodes[group.id] ?? ''
+            const shown = showPasscodes[group.id] ?? false
+            const newVal = newPasscodes[group.id] ?? ''
+            const msg = passcodeMsgs[group.id] ?? ''
+            const busy = passcodeLoadings[group.id] ?? false
+            return (
+              <div key={group.id} style={{
+                background: '#12121a',
+                border: '1px solid #1e1e2e',
+                borderRadius: '12px',
+                padding: '1.25rem 1.5rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '0.75rem',
               }}>
-                {showPasscode ? currentPasscode : '••••••'}
-              </span>
-              <button
-                onClick={() => setShowPasscode(v => !v)}
-                style={{
-                  background: 'none',
-                  border: '1px solid #2a2a3e',
-                  borderRadius: '6px',
-                  color: '#8888aa',
-                  cursor: 'pointer',
-                  padding: '0.2rem 0.5rem',
-                  fontSize: '0.8rem',
-                  fontFamily: "'DM Sans', sans-serif",
-                }}
-              >
-                {showPasscode ? 'Hide' : 'Show'}
-              </button>
-            </div>
-          </div>
-          <form onSubmit={handleUpdatePasscode} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              value={newPasscode}
-              onChange={e => { setNewPasscode(e.target.value.replace(/\D/g, '')); setPasscodeMsg('') }}
-              placeholder="New 6-digit code"
-              style={{
-                flex: 1,
-                minWidth: '140px',
-                background: '#0a0a0f',
-                border: '1px solid #2a2a3e',
-                borderRadius: '8px',
-                padding: '0.6rem 0.9rem',
-                color: '#f0f0ff',
-                fontSize: '1rem',
-                fontFamily: 'monospace',
-                letterSpacing: '0.2em',
-                outline: 'none',
-              }}
-              onFocus={e => (e.target.style.borderColor = '#6c63ff')}
-              onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
-            />
-            <button
-              type="submit"
-              disabled={passcodeLoading}
-              style={{
-                background: passcodeLoading ? '#4a4580' : '#6c63ff',
-                color: '#fff',
-                border: 'none',
-                borderRadius: '8px',
-                padding: '0.6rem 1.2rem',
-                fontSize: '0.9rem',
-                fontFamily: "'Sora', sans-serif",
-                fontWeight: 600,
-                cursor: passcodeLoading ? 'not-allowed' : 'pointer',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {passcodeLoading ? 'Saving…' : 'Update'}
-            </button>
-          </form>
-          {passcodeMsg && (
-            <p style={{
-              fontSize: '0.85rem',
-              fontFamily: "'DM Sans', sans-serif",
-              color: passcodeMsg === 'Passcode updated.' ? '#4ade80' : '#f87171',
-            }}>
-              {passcodeMsg}
-            </p>
-          )}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                  <span style={{ fontFamily: "'DM Sans', sans-serif", color: '#8888aa', fontSize: '0.9rem' }}>
+                    {group.label}
+                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{
+                      fontFamily: 'monospace',
+                      fontSize: '1.1rem',
+                      color: '#6c63ff',
+                      letterSpacing: '0.2em',
+                      background: '#0a0a0f',
+                      border: '1px solid #2a2a3e',
+                      borderRadius: '6px',
+                      padding: '0.2rem 0.7rem',
+                    }}>
+                      {shown ? (current || '—') : '••••••'}
+                    </span>
+                    <button
+                      onClick={() => setShowPasscodes(m => ({ ...m, [group.id]: !shown }))}
+                      style={{
+                        background: 'none',
+                        border: '1px solid #2a2a3e',
+                        borderRadius: '6px',
+                        color: '#8888aa',
+                        cursor: 'pointer',
+                        padding: '0.2rem 0.5rem',
+                        fontSize: '0.8rem',
+                        fontFamily: "'DM Sans', sans-serif",
+                      }}
+                    >
+                      {shown ? 'Hide' : 'Show'}
+                    </button>
+                  </div>
+                </div>
+                <form onSubmit={e => handleUpdatePasscode(group.id, e)} style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={6}
+                    value={newVal}
+                    onChange={e => {
+                      const v = e.target.value.replace(/\D/g, '')
+                      setNewPasscodes(m => ({ ...m, [group.id]: v }))
+                      setPasscodeMsgs(m => ({ ...m, [group.id]: '' }))
+                    }}
+                    placeholder="New 6-digit code"
+                    style={{
+                      flex: 1,
+                      minWidth: '140px',
+                      background: '#0a0a0f',
+                      border: '1px solid #2a2a3e',
+                      borderRadius: '8px',
+                      padding: '0.6rem 0.9rem',
+                      color: '#f0f0ff',
+                      fontSize: '1rem',
+                      fontFamily: 'monospace',
+                      letterSpacing: '0.2em',
+                      outline: 'none',
+                    }}
+                    onFocus={e => (e.target.style.borderColor = '#6c63ff')}
+                    onBlur={e => (e.target.style.borderColor = '#2a2a3e')}
+                  />
+                  <button
+                    type="submit"
+                    disabled={busy}
+                    style={{
+                      background: busy ? '#4a4580' : '#6c63ff',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '0.6rem 1.2rem',
+                      fontSize: '0.9rem',
+                      fontFamily: "'Sora', sans-serif",
+                      fontWeight: 600,
+                      cursor: busy ? 'not-allowed' : 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {busy ? 'Saving…' : 'Update'}
+                  </button>
+                </form>
+                {msg && (
+                  <p style={{
+                    fontSize: '0.85rem',
+                    fontFamily: "'DM Sans', sans-serif",
+                    color: msg === 'Updated.' ? '#4ade80' : '#f87171',
+                    margin: 0,
+                  }}>
+                    {msg}
+                  </p>
+                )}
+              </div>
+            )
+          })}
         </div>
 
         {/* Grade legend */}
