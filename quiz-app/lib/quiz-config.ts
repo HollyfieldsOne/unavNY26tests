@@ -38,6 +38,15 @@ export const QUIZZES: QuizConfig[] = [
     questionsTable: 'session_2_doble_grado',
     sessionsTable: 'session_2_doble_grado_sessions',
     answersTable: 'session_2_doble_grado_answers',
+    group: 'double-degree',
+  },
+  {
+    id: 'finance-3',
+    label: 'Session 3 Finance',
+    questionsTable: 'session_3_finance_questions',
+    sessionsTable: 'session_3_finance_sessions',
+    answersTable: 'session_3_finance_answers',
+    group: 'finance',
   },
 ]
 
