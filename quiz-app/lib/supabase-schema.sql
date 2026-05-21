@@ -99,6 +99,35 @@ CREATE POLICY "anon_all_dd2_sessions" ON session_2_doble_grado_sessions FOR ALL 
 CREATE POLICY "anon_all_dd2_answers"  ON session_2_doble_grado_answers  FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- ============================================================
+-- SESSION 3 DOUBLE DEGREE — sessions & answers tables
+-- (question bank already exists as session_3_doble_grado)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS session_3_doble_grado_sessions (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  first_name   TEXT NOT NULL,
+  last_name    TEXT NOT NULL,
+  started_at   TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  score        INT
+);
+
+CREATE TABLE IF NOT EXISTS session_3_doble_grado_answers (
+  id              SERIAL PRIMARY KEY,
+  session_id      UUID REFERENCES session_3_doble_grado_sessions(id),
+  question_id     INT  REFERENCES session_3_doble_grado(id),
+  selected_option CHAR(1),
+  is_correct      BOOLEAN,
+  answered_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE session_3_doble_grado_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE session_3_doble_grado_answers  ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "anon_all_dd3_sessions" ON session_3_doble_grado_sessions FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_dd3_answers"  ON session_3_doble_grado_answers  FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- ============================================================
 -- SESSION 3 FINANCE — sessions & answers tables
 -- (question bank already exists as session_3_finance_questions)
 -- ============================================================

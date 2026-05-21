@@ -41,6 +41,14 @@ export const QUIZZES: QuizConfig[] = [
     group: 'double-degree',
   },
   {
+    id: 'double-degree-3',
+    label: 'Session 3 – Double Degree',
+    questionsTable: 'session_3_doble_grado',
+    sessionsTable: 'session_3_doble_grado_sessions',
+    answersTable: 'session_3_doble_grado_answers',
+    group: 'double-degree',
+  },
+  {
     id: 'finance-3',
     label: 'Session 3 Finance',
     questionsTable: 'session_3_finance_questions',
