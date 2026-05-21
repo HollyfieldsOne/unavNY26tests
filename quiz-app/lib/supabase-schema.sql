@@ -115,7 +115,7 @@ CREATE TABLE IF NOT EXISTS session_3_doble_grado_sessions (
 CREATE TABLE IF NOT EXISTS session_3_doble_grado_answers (
   id              SERIAL PRIMARY KEY,
   session_id      UUID REFERENCES session_3_doble_grado_sessions(id),
-  question_id     INT  REFERENCES session_3_doble_grado(id),
+  question_id     INT  REFERENCES session_3_doble_grado_questions(id),
   selected_option CHAR(1),
   is_correct      BOOLEAN,
   answered_at     TIMESTAMPTZ DEFAULT NOW()
