@@ -128,6 +128,35 @@ CREATE POLICY "anon_all_f3_sessions" ON session_3_finance_sessions FOR ALL TO an
 CREATE POLICY "anon_all_f3_answers"  ON session_3_finance_answers  FOR ALL TO anon USING (true) WITH CHECK (true);
 
 -- ============================================================
+-- SESSION 4 FINANCE — sessions & answers tables
+-- (question bank already exists as session_4_finance_questions)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS session_4_finance_sessions (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  first_name   TEXT NOT NULL,
+  last_name    TEXT NOT NULL,
+  started_at   TIMESTAMPTZ DEFAULT NOW(),
+  completed_at TIMESTAMPTZ,
+  score        INT
+);
+
+CREATE TABLE IF NOT EXISTS session_4_finance_answers (
+  id              SERIAL PRIMARY KEY,
+  session_id      UUID REFERENCES session_4_finance_sessions(id),
+  question_id     INT  REFERENCES session_4_finance_questions(id),
+  selected_option CHAR(1),
+  is_correct      BOOLEAN,
+  answered_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE session_4_finance_sessions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE session_4_finance_answers  ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "anon_all_f4_sessions" ON session_4_finance_sessions FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon_all_f4_answers"  ON session_4_finance_answers  FOR ALL TO anon USING (true) WITH CHECK (true);
+
+-- ============================================================
 -- SEED DATA (correct_option always 'A' in DB — shuffling happens in app)
 INSERT INTO session_1_finance_questions (question_text, option_a, option_b, option_c, option_d, correct_option) VALUES
 ('According to the instructor, what percentage of M&A deals globally destroy value?', 'Around 70%', 'Around 50%', 'Around 30%', 'Around 90%', 'A'),

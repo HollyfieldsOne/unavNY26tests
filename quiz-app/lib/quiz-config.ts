@@ -48,6 +48,14 @@ export const QUIZZES: QuizConfig[] = [
     answersTable: 'session_3_finance_answers',
     group: 'finance',
   },
+  {
+    id: 'finance-4',
+    label: 'Session 4 Finance',
+    questionsTable: 'session_4_finance_questions',
+    sessionsTable: 'session_4_finance_sessions',
+    answersTable: 'session_4_finance_answers',
+    group: 'finance',
+  },
 ]
 
 export function getQuiz(id: string | null): QuizConfig | undefined {
